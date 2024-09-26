@@ -13,8 +13,8 @@ Clone this repository
 Install the required packages:
 Copypip install -r requirements.txt
 
-Run the Streamlit app:
-Copystreamlit run app.py
+##Run the Streamlit app:
+streamlit run app.py
 
 
 Deployment
