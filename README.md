@@ -1,13 +1,13 @@
 # AmazonIT
 
-Features
+##Features
 
 Search products on Amazon US, Canada, and Italy
 Filter results by price range
 View product details including image, description, price, number of reviews, and rating
 Visualize price distribution with a histogram
 
-How to Run Locally
+##How to Run Locally
 
 Clone this repository
 Install the required packages:
