@@ -13,6 +13,7 @@ from requests import HTTPError
 MAX_PAGES = 50
 DELAY = 1  # Delay between requests in seconds
 
+
 def __response_hook(r, *args, **kwargs):
     try:
         r.raise_for_status()
@@ -28,6 +29,7 @@ def __response_hook(r, *args, **kwargs):
             return f"Si è verificato un errore: {error_msg}"
     return r
 
+
 session = requests.Session()
 session.headers.update(
     {
@@ -38,6 +40,7 @@ session.headers.update(
 )
 session.hooks = {"response": __response_hook}
 
+
 def get(url, **kwargs):
     time.sleep(DELAY)  # Add delay between requests
     response = session.get(url, **kwargs)
@@ -45,6 +48,7 @@ def get(url, **kwargs):
         st.error(response)
         return None
     return response
+
 
 @st.cache_data
 def search(q: str):
@@ -88,6 +92,8 @@ def search(q: str):
                 price = div.find("span", "a-price")
                 if price:
                     result["price"] = price.find("span", "a-offscreen").text
+                else:
+                    result["price"] = None  # Or a default value like "N/A"
 
                 rating = div.find(
                     "span",
@@ -97,7 +103,9 @@ def search(q: str):
                     },
                 )
                 if rating:
-                    result["rating"] = float(rating["aria-label"].split(" ")[0].replace(",", "."))
+                    result["rating"] = float(
+                        rating["aria-label"].split(" ")[0].replace(",", ".")
+                    )
                 number_of_reviews = div.find(
                     "a", href=lambda h: h and h.endswith("#customerReviews")
                 )
@@ -116,7 +124,10 @@ def search(q: str):
         return results
 
     with ThreadPoolExecutor() as t:
-        return [item for sublist in t.map(get_results, range(1, pages + 1)) for item in sublist]
+        return [
+            item for sublist in t.map(get_results, range(1, pages + 1)) for item in sublist
+        ]
+
 
 def main():
     st.title("ASearch")
@@ -141,9 +152,20 @@ def main():
             df = pd.DataFrame(search(term))
 
         if df.empty:
-            st.error("Nessun risultato trovato o si è verificato un errore durante il recupero dei dati.")
+            st.error(
+                "Nessun risultato trovato o si è verificato un errore durante il recupero dei dati."
+            )
         else:
-            df["price_value"] = df.price.str.replace("€", "").str.replace(".", "").str.replace(",", ".").astype(float)
+            # Handle missing prices before manipulation
+            if "price" in df.columns and not df.price.isnull().all():
+                df["price_value"] = (
+                    df.price.str.replace("€", "")
+                    .str.replace(".", "")
+                    .str.replace(",", ".")
+                    .astype(float)
+                )
+            else:
+                df["price_value"] = None  # Or a default value
 
             price_range = st.slider(
                 "Prezzo",
@@ -157,20 +179,34 @@ def main():
 
             st.dataframe(
                 df_filtered[
-                    ["link", "img", "description", "price_value", "number_of_reviews", "rating"]
+                    [
+                        "link",
+                        "img",
+                        "description",
+                        "price_value",
+                        "number_of_reviews",
+                        "rating",
+                    ]
                 ],
                 column_config={
                     "link": st.column_config.LinkColumn("Link", display_text="Apri"),
                     "img": st.column_config.ImageColumn("Immagine"),
                     "description": "Descrizione",
-                    "price_value": st.column_config.NumberColumn("Prezzo", format="€%.2f"),
+                    "price_value": st.column_config.NumberColumn(
+                        "Prezzo", format="€%.2f"
+                    ),
                     "number_of_reviews": "Recensioni",
-                    "rating": st.column_config.NumberColumn("Valutazione", format="%.1f ⭐️"),
+                    "rating": st.column_config.NumberColumn(
+                        "Valutazione", format="%.1f ⭐️"
+                    ),
                 },
                 use_container_width=True,
             )
 
-            st.plotly_chart(px.histogram(df_filtered.price_value, title="Distribuzione dei Prezzi"))
+            st.plotly_chart(
+                px.histogram(df_filtered.price_value, title="Distribuzione dei Prezzi")
+            )
+
 
 if __name__ == "__main__":
     main()
