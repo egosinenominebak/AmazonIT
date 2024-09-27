@@ -11,7 +11,6 @@ from requests import HTTPError
 
 MAX_PAGES = 50
 
-
 def __response_hook(r, *args, **kwargs):
     try:
         r.raise_for_status()
@@ -20,25 +19,22 @@ def __response_hook(r, *args, **kwargs):
             BeautifulSoup(r.text).text.strip(), request=e.request, response=e.response
         ) from e
 
-
 session = requests.Session()
 session.headers.update(
     {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/111.0",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
     }
 )
 session.hooks = {"response": __response_hook}
 
-
 def get(url, **kwargs):
     return session.get(url, **kwargs)
 
-
 @st.cache_data
-def search(q: str, domain: str):
-    site = f"amazon.{domain}"
+def search(q: str):
+    site = "amazon.it"
     url = f"https://{site}/s?k={q}"
 
     soup = BeautifulSoup(get(url).content, "html.parser")
@@ -52,7 +48,7 @@ def search(q: str, domain: str):
         divs = soup.find_all("div", attrs={"data-component-type": "s-search-result"})
 
         if not divs:
-            logger.error(f"No results found  in HTML: {soup}")
+            logger.error(f"No results found in HTML: {soup}")
             return None
 
         results = []
@@ -74,18 +70,18 @@ def search(q: str, domain: str):
                     "span",
                     attrs={
                         "aria-label": lambda l: l
-                        and re.fullmatch(".* out of .* stars", l)
+                        and re.fullmatch(".* su .* stelle", l)
                     },
                 )
                 if rating:
-                    result["rating"] = float(rating["aria-label"].split(" ")[0])
+                    result["rating"] = float(rating["aria-label"].split(" ")[0].replace(",", "."))
                 number_of_reviews = div.find(
                     "a", href=lambda h: h.endswith("#customerReviews")
                 )
                 if number_of_reviews:
                     result["number_of_reviews"] = int(
                         number_of_reviews.text.strip()
-                        .replace(",", "")
+                        .replace(".", "")
                         .replace("(", "")
                         .replace(")", "")
                     )
@@ -99,33 +95,21 @@ def search(q: str, domain: str):
     with ThreadPoolExecutor() as t:
         return [t for l in t.map(get_results, range(1, pages + 1)) for t in l]
 
-
 st.title("ASearch")
-st.subheader("A better Amazon search")
+st.subheader("Una ricerca migliore su Amazon")
 
-col1, col2 = st.columns([3, 1])
+term = st.text_input("Cerca")
 
-with col1:
-    term = st.text_input("Search")
-
-with col2:
-    domains = {
-        "ca": "🇨🇦 Canada",
-        "com": "🇺🇸 United States",
-        "it": "🇮🇹 Italy",  # Added Italian Amazon
-    }
-    country = st.selectbox("Country", domains.keys(), format_func=domains.get)
-
-if term and country:
-    df = pd.DataFrame(search(term, country))
-    df["price_value"] = df.price.replace(r"[\$,€]", "", regex=True).astype(float)
+if term:
+    df = pd.DataFrame(search(term))
+    df["price_value"] = df.price.str.replace("€", "").str.replace(".", "").str.replace(",", ".").astype(float)
 
     price_range = st.slider(
-        "Price",
+        "Prezzo",
         df.price_value.min(),
         df.price_value.max(),
         (df.price_value.min(), df.price_value.max()),
-        format="$%f",
+        format="€%.2f",
     )
 
     df_filtered = df[df.price_value.between(*price_range)]
@@ -135,12 +119,12 @@ if term and country:
             ["link", "img", "description", "price_value", "number_of_reviews", "rating"]
         ],
         column_config={
-            "link": st.column_config.LinkColumn("Link", display_text="Open"),
-            "img": st.column_config.ImageColumn("Image"),
-            "description": "Description",
-            "price_value": st.column_config.NumberColumn("Price", format="$%.2f"),
-            "number_of_reviews": "Reviews",
-            "rating": st.column_config.NumberColumn("Rating", format="%f ⭐️"),
+            "link": st.column_config.LinkColumn("Link", display_text="Apri"),
+            "img": st.column_config.ImageColumn("Immagine"),
+            "description": "Descrizione",
+            "price_value": st.column_config.NumberColumn("Prezzo", format="€%.2f"),
+            "number_of_reviews": "Recensioni",
+            "rating": st.column_config.NumberColumn("Valutazione", format="%.1f ⭐️"),
         },
         use_container_width=True,
     )
